@@ -107,7 +107,7 @@ found:
 				return PTR_ERR(vreg);
 			}
 		}
-
+/*
 		if (regulator_count_voltages(vreg) > 0) {
 			rc = regulator_set_voltage(vreg, vreg_conf[i].vmin,
 					vreg_conf[i].vmax);
@@ -116,7 +116,7 @@ found:
 					"Unable to set voltage on %s, %d\n",
 					name, rc);
 		}
-
+*/
 		rc = regulator_enable(vreg);
 		if (rc) {
 			dev_err(dev, "error enabling %s: %d\n", name, rc);
