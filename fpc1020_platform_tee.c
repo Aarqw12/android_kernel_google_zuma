@@ -76,6 +76,7 @@ struct fpc1020_data {
 	atomic_t wakeup_enabled; /* Used both in ISR and non-ISR */
 	struct pinctrl *rst_pinctrl;
 	struct pinctrl_state *rst_state;
+	atomic_t irq_enabled;
 };
 
 static int vreg_setup(struct fpc1020_data *fpc1020, const char *name,
@@ -397,6 +398,35 @@ static ssize_t irq_ack(struct device *dev,
 }
 static DEVICE_ATTR(irq, 0600, irq_get, irq_ack);
 
+/**
+ * sysfs node for controlling whether the driver is allowed
+ * to notify HAL of finger down event
+ *
+ * @dev: fp device structure
+ * @attr: device attribute
+ * @buf: buffer that being passed to this driver
+ * @count: count
+ */
+
+static ssize_t irq_enable_set(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct fpc1020_data *fpc1020 = dev_get_drvdata(dev);
+	ssize_t ret = count;
+
+	mutex_lock(&fpc1020->lock);
+	if (!strncmp(buf, "enable", strlen("enable")))
+		atomic_set(&fpc1020->irq_enabled, 1);
+	else if (!strncmp(buf, "disable", strlen("disable")))
+		atomic_set(&fpc1020->irq_enabled, 0);
+	else
+		ret = -EINVAL;
+	mutex_unlock(&fpc1020->lock);
+
+	return ret;
+}
+static DEVICE_ATTR(irq_enable, 0200, NULL, irq_enable_set);
+
 static struct attribute *attributes[] = {
 	&dev_attr_device_prepare.attr,
 	&dev_attr_regulator_enable.attr,
@@ -404,6 +434,7 @@ static struct attribute *attributes[] = {
 	&dev_attr_wakeup_enable.attr,
 	&dev_attr_clk_enable.attr,
 	&dev_attr_irq.attr,
+	&dev_attr_irq_enable.attr,
 	NULL
 };
 
@@ -421,7 +452,9 @@ static irqreturn_t fpc1020_irq_handler(int irq, void *handle)
 		__pm_wakeup_event(fpc1020->ttw_ws, FPC_TTW_HOLD_TIME);
 	}
 
-	sysfs_notify(&fpc1020->dev->kobj, NULL, dev_attr_irq.attr.name);
+	if (atomic_read(&fpc1020->irq_enabled)) {
+	    sysfs_notify(&fpc1020->dev->kobj, NULL, dev_attr_irq.attr.name);
+    }
 
 	return IRQ_HANDLED;
 }
@@ -560,6 +593,8 @@ static int fpc1020_probe(struct platform_device *pdev)
 				gpio_to_irq(fpc1020->irq_gpio));
 		goto exit;
 	}
+
+	atomic_set(&fpc1020->irq_enabled, 1);
 
 	dev_dbg(dev, "requested irq %d\n", gpio_to_irq(fpc1020->irq_gpio));
 
