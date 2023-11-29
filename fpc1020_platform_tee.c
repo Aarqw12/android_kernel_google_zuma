@@ -141,7 +141,7 @@ found:
 }
 
 /**
- * sysfs node for controlling clocks.
+ * clk_enable_set() - sysfs node for controlling clocks.
  *
  * This is disabled in platform variant of this driver but kept for
  * backwards compatibility. Only prints a debug print that it is
@@ -239,8 +239,8 @@ static ssize_t hw_reset_set(struct device *dev,
 static DEVICE_ATTR(hw_reset, 0200, NULL, hw_reset_set);
 
 /**
- * Will setup GPIOs, and regulators to correctly initialize the touch sensor to
- * be ready for work.
+ * device_prepare() - Will setup GPIOs, and regulators to correctly initialize
+ * the touch sensor to be ready for work.
  *
  * In the correct order according to the sensor spec this function will
  * enable/disable regulators, and reset line, all to set the sensor in a
@@ -303,7 +303,8 @@ exit:
 }
 
 /**
- * sysfs node to enable/disable (power up/power down) the touch sensor
+ * device_prepare_set() - sysfs node to enable/disable (power up/power down)
+ * the touch sensor
  *
  * @see device_prepare
  * @dev: fp device structure
@@ -329,8 +330,8 @@ static ssize_t device_prepare_set(struct device *dev,
 static DEVICE_ATTR(device_prepare, 0200, NULL, device_prepare_set);
 
 /**
- * sysfs node for controlling whether the driver is allowed
- * to wake up the platform on interrupt.
+ * wakeup_enable_set() - sysfs node for controlling whether the driver is
+ * allowed to wake up the platform on interrupt.
  *
  * @dev: fp device structure
  * @attr: device attribute
@@ -358,8 +359,9 @@ static ssize_t wakeup_enable_set(struct device *dev,
 static DEVICE_ATTR(wakeup_enable, 0200, NULL, wakeup_enable_set);
 
 /**
- * sysf node to check the interrupt status of the sensor, the interrupt
- * handler should perform sysf_notify to allow userland to poll the node.
+ * irq_get() - sysf node to check the interrupt status of the sensor, the
+ * interrupt handler should perform sysf_notify to allow userland to poll
+ * the node.
  *
  * @dev: fp device structure
  * @attr: device attribute
@@ -377,7 +379,7 @@ static ssize_t irq_get(struct device *dev,
 }
 
 /**
- * writing to the irq node will just drop a printk message
+ * irq_ack() - writing to the irq node will just drop a printk message
  * and return success, used for latency measurement.
  *
  * @dev: fp device structure
@@ -399,7 +401,7 @@ static ssize_t irq_ack(struct device *dev,
 static DEVICE_ATTR(irq, 0600, irq_get, irq_ack);
 
 /**
- * sysfs node for controlling whether the driver is allowed
+ * irq_enable_set() - sysfs node for controlling whether the driver is allowed
  * to notify HAL of finger down event
  *
  * @dev: fp device structure
