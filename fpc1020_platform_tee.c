@@ -76,6 +76,7 @@ struct fpc1020_data {
 	atomic_t wakeup_enabled; /* Used both in ISR and non-ISR */
 	struct pinctrl *rst_pinctrl;
 	struct pinctrl_state *rst_state;
+	atomic_t irq_enabled;
 };
 
 static int vreg_setup(struct fpc1020_data *fpc1020, const char *name,
@@ -107,7 +108,7 @@ found:
 				return PTR_ERR(vreg);
 			}
 		}
-
+/*
 		if (regulator_count_voltages(vreg) > 0) {
 			rc = regulator_set_voltage(vreg, vreg_conf[i].vmin,
 					vreg_conf[i].vmax);
@@ -116,7 +117,7 @@ found:
 					"Unable to set voltage on %s, %d\n",
 					name, rc);
 		}
-
+*/
 		rc = regulator_enable(vreg);
 		if (rc) {
 			dev_err(dev, "error enabling %s: %d\n", name, rc);
@@ -140,7 +141,7 @@ found:
 }
 
 /**
- * sysfs node for controlling clocks.
+ * clk_enable_set() - sysfs node for controlling clocks.
  *
  * This is disabled in platform variant of this driver but kept for
  * backwards compatibility. Only prints a debug print that it is
@@ -238,8 +239,8 @@ static ssize_t hw_reset_set(struct device *dev,
 static DEVICE_ATTR(hw_reset, 0200, NULL, hw_reset_set);
 
 /**
- * Will setup GPIOs, and regulators to correctly initialize the touch sensor to
- * be ready for work.
+ * device_prepare() - Will setup GPIOs, and regulators to correctly initialize
+ * the touch sensor to be ready for work.
  *
  * In the correct order according to the sensor spec this function will
  * enable/disable regulators, and reset line, all to set the sensor in a
@@ -302,7 +303,8 @@ exit:
 }
 
 /**
- * sysfs node to enable/disable (power up/power down) the touch sensor
+ * device_prepare_set() - sysfs node to enable/disable (power up/power down)
+ * the touch sensor
  *
  * @see device_prepare
  * @dev: fp device structure
@@ -328,8 +330,8 @@ static ssize_t device_prepare_set(struct device *dev,
 static DEVICE_ATTR(device_prepare, 0200, NULL, device_prepare_set);
 
 /**
- * sysfs node for controlling whether the driver is allowed
- * to wake up the platform on interrupt.
+ * wakeup_enable_set() - sysfs node for controlling whether the driver is
+ * allowed to wake up the platform on interrupt.
  *
  * @dev: fp device structure
  * @attr: device attribute
@@ -357,8 +359,9 @@ static ssize_t wakeup_enable_set(struct device *dev,
 static DEVICE_ATTR(wakeup_enable, 0200, NULL, wakeup_enable_set);
 
 /**
- * sysf node to check the interrupt status of the sensor, the interrupt
- * handler should perform sysf_notify to allow userland to poll the node.
+ * irq_get() - sysf node to check the interrupt status of the sensor, the
+ * interrupt handler should perform sysf_notify to allow userland to poll
+ * the node.
  *
  * @dev: fp device structure
  * @attr: device attribute
@@ -376,7 +379,7 @@ static ssize_t irq_get(struct device *dev,
 }
 
 /**
- * writing to the irq node will just drop a printk message
+ * irq_ack() - writing to the irq node will just drop a printk message
  * and return success, used for latency measurement.
  *
  * @dev: fp device structure
@@ -397,6 +400,35 @@ static ssize_t irq_ack(struct device *dev,
 }
 static DEVICE_ATTR(irq, 0600, irq_get, irq_ack);
 
+/**
+ * irq_enable_set() - sysfs node for controlling whether the driver is allowed
+ * to notify HAL of finger down event
+ *
+ * @dev: fp device structure
+ * @attr: device attribute
+ * @buf: buffer that being passed to this driver
+ * @count: count
+ */
+
+static ssize_t irq_enable_set(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct fpc1020_data *fpc1020 = dev_get_drvdata(dev);
+	ssize_t ret = count;
+
+	mutex_lock(&fpc1020->lock);
+	if (!strncmp(buf, "enable", strlen("enable")))
+		atomic_set(&fpc1020->irq_enabled, 1);
+	else if (!strncmp(buf, "disable", strlen("disable")))
+		atomic_set(&fpc1020->irq_enabled, 0);
+	else
+		ret = -EINVAL;
+	mutex_unlock(&fpc1020->lock);
+
+	return ret;
+}
+static DEVICE_ATTR(irq_enable, 0200, NULL, irq_enable_set);
+
 static struct attribute *attributes[] = {
 	&dev_attr_device_prepare.attr,
 	&dev_attr_regulator_enable.attr,
@@ -404,6 +436,7 @@ static struct attribute *attributes[] = {
 	&dev_attr_wakeup_enable.attr,
 	&dev_attr_clk_enable.attr,
 	&dev_attr_irq.attr,
+	&dev_attr_irq_enable.attr,
 	NULL
 };
 
@@ -421,7 +454,9 @@ static irqreturn_t fpc1020_irq_handler(int irq, void *handle)
 		__pm_wakeup_event(fpc1020->ttw_ws, FPC_TTW_HOLD_TIME);
 	}
 
-	sysfs_notify(&fpc1020->dev->kobj, NULL, dev_attr_irq.attr.name);
+	if (atomic_read(&fpc1020->irq_enabled)) {
+	    sysfs_notify(&fpc1020->dev->kobj, NULL, dev_attr_irq.attr.name);
+    }
 
 	return IRQ_HANDLED;
 }
@@ -560,6 +595,8 @@ static int fpc1020_probe(struct platform_device *pdev)
 				gpio_to_irq(fpc1020->irq_gpio));
 		goto exit;
 	}
+
+	atomic_set(&fpc1020->irq_enabled, 1);
 
 	dev_dbg(dev, "requested irq %d\n", gpio_to_irq(fpc1020->irq_gpio));
 
