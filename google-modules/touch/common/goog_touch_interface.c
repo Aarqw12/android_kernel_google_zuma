@@ -2166,15 +2166,6 @@ static int panel_notifier_call(
 
 	if (!gti->connector) return 0;
 
-#if IS_ENABLED(CONFIG_GS_DRM_PANEL_UNIFIED)
-	if (is_gs_drm_connector(gti->connector)) {
-		if (id == GS_PANEL_NOTIFIER_SET_OP_HZ) {
-			gti->panel_op_hz = *(unsigned int*)data;
-			if (gti->event_wq != NULL)
-				queue_work(gti->event_wq, &gti->set_op_hz_work);
-		}
-	}
-#endif
 	if (is_exynos_drm_connector(gti->connector)) {
 		if (id == EXYNOS_PANEL_NOTIFIER_SET_OP_HZ) {
 			gti->panel_op_hz = *(unsigned int*)data;
@@ -2201,10 +2192,7 @@ static int panel_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_attach
 		}
 
 		gti->panel_notifier.notifier_call = panel_notifier_call;
-#if IS_ENABLED(CONFIG_GS_DRM_PANEL_UNIFIED)
-		if (is_gs_drm_connector(gti->connector))
-			gs_connector_register_op_hz_notifier(gti->connector, &gti->panel_notifier);
-#endif
+
 		if (is_exynos_drm_connector(gti->connector))
 			exynos_panel_register_notifier(gti->connector, &gti->panel_notifier);
 	}
@@ -2223,10 +2211,6 @@ static void panel_bridge_detach(struct drm_bridge *bridge)
 
 		if (!gti->connector) return;
 
-#if IS_ENABLED(CONFIG_GS_DRM_PANEL_UNIFIED)
-		if (is_gs_drm_connector(gti->connector))
-			gs_connector_unregister_op_hz_notifier(gti->connector, &gti->panel_notifier);
-#endif
 		if (is_exynos_drm_connector(gti->connector))
 			exynos_panel_unregister_notifier(gti->connector, &gti->panel_notifier);
 	}
